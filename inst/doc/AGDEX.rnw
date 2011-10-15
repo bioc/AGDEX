@@ -1,0 +1,266 @@
+%\VignetteIndexEntry{An introduction to AGDEX}
+%\VignetteDepends{Biobase}
+%\VignetteKeywords{Microarray Association Pattern}
+%\VignettePackage{AGDEX}
+\documentclass[]{article}
+\usepackage{times}
+\usepackage{hyperref}
+\usepackage{enumerate}
+
+
+\newcommand{\Rpackage}[1]{{\textit{#1}}}
+\title{An Introduction to \Rpackage{AGDEX}}
+\author{Stan Pounds, Cuilan Lani Gao}
+\date{\Sexpr{date()}}
+
+\begin{document}
+
+\maketitle
+
+<<options,echo=FALSE>>=
+options(width=60)
+@ 
+
+\section{Introduction}
+A challenging problem in contemporary genomics research is how to integrate and compare gene expression 
+data from studies that utilize different microarray platforms or even different species 
+(e.g. a study of a human disease and a study of an animal model of that disease).  
+We have developed the agreement of differential expression (AGDEX) procedure to 
+integrate differential expression analysis results across two experiments that may utilize 
+different platforms or even different species. AGDEX is able to combine transcriptome 
+information across two experiments that compare expression 
+across two biological conditions. AGDEX was initially used in the study of the pediatric brain tumor 
+ ependymoma (Johnson et al., Nature 2010) to characterize the transcriptional similarity of a mouse model
+ to one subtype of human ependymoma.  
+ 
+
+The AGDEX procedure performs a rigorous differential expression analysis for 
+each two-group comparison and formally evaluates the agreement of differential 
+expression analysis results across the entire transcriptome. Optionally, users
+may use AGDEX to identify differentially expressed gene-sets for each comparison
+and evaluate agreement of differential expression analysis results within gene-sets.
+  
+In total, the AGDEX procedure performs the following statistical analyses:
+
+\begin{enumerate}
+\item	identify genes that are differentially expressed in each experiment;
+
+\item	identify gene-sets that are differentially expressed in each experiment;
+
+\item	integrate results across experiments to identify differentially expressed genes;
+\item	integrate results across experiments to identify differentially expressed gene-sets;
+
+\item	characterize and determine the statistical significance of similarities of differential and
+expression profiles across the two experiments for the entire transcriptome and for specific gene-sets.
+\end{enumerate}
+
+The AGDEX method is described in greater detail in the supplementary materials of Johnson et al. (2010) and Gibson et al. (2010).  
+
+\section{Pre-requisite Packages}
+The AGDEX package depends on the {\em Biobase} and {\em GSEABase} packages.  Users must know how to store the expression data
+as an {\em ExpressionSet} object defined by the {\em Biobase} package.  To perform gene-set analyses, users must represent
+gene-set data as an {\em GeneSetCollection} object defined by the {\em GSEABase} package.
+
+\section{Data Requirements}
+Data must be prepared and stored in a specific format for AGDEX analysis.  First, data from each experiment must be
+stored as an {\em ExpressionSet} object defined by the {\em Biobase} package.  Secondly, the data from each experiment
+must be linked with a definition of the contrast (such as ``tumor - control'') for the differential expression analysis.  Optionally,
+each experiment may have gene-set definitions represented as a {\em GeneSetCollection} object defined by the {\em GSEABase} package.
+These information provide all the details necessary to perform differential expression analysis of the data from each experiment.  Finally,
+a data-set that matches the probe-set identifiers from the two experiments is necessary to integrate results across the two experiments
+and evaluate the agreement of differential expression results across the two experiments.
+
+AGDEX requires that the information needed to perform differential expression analysis of one experiment be provided in the form
+of a {\em dex.set} list object.  The expression and phenotype data are stored as an {\em ExpressionSet} in a component named
+{\em Eset.data}.  Recall that an {\em ExpressionSet} stores the expression data as a samples-by-genes matrix in the component {\em exprs} and the phenotype data as
+a {\em data.frame} in the component {\em pData}.  The expression data should be normalized log-intensity values.  The phenotype data must include one column with group labels to be used for the two-group differential expression analysis comparison.  
+The {\em comp.var} component of the {\em dex.set} list object gives the name or numeric index of the column of the phenotype data with those group labels.
+The {\em comp.def} component of the {\em dex.set} list object is a string that defines the contrast for the two-group comparison.  For example,
+the {\em comp.def} component may contain the string ``tumor-control'' to indicate that the analysis will compare the expression of those
+samples with the label ``tumor'' to that of those samples with the label ``control''.  Optionally, the {\em dex.set} object may include
+a {\em GeneSetCollection} object (as defined by the package {\em GSEABase}) in the {\em gset.collection} component.  In this way,
+the {\em dex.set} object contains the data for and the definition of a two-group differential expression analysis.  The data and definition for each
+differential expression analysis must be contained in a {\em dex.set} object.
+
+To perform the cross-experiment integration and evaluate the cross-experiment agreement, AGDEX requires information to match the probe-set identifiers
+of the first differential expression analysis to those of the second differential expression analysis.  This information is provided in the form
+of a {\em map.data} list object.  The {\em probe.map} component of the {\em map.data} object is a {\em data.frame} that defines how probe-set identifiers
+are matched across experiments.  As such, {\em map.data} must include a column with probe-set identifiers from experiment ``A'' and a column with probe-set
+identifiers from experiment ``B''.  The components {\em map.Aprobe.col} and {\em map.Bprobe.col} give the name or numeric index of the columns of the {\em probe.map} component
+with the probe-set identifiers from experiments ``A'' and ``B'', respectively.  
+
+Finally, the user must specify how many permutations must be performed.  AGDEX allows users to utilize an adaptive permutation testing (APT) strategy to reduce computing time for gene-set analyses.  APT
+performs permutations until obtaining {\em min.perms} permutation-statistics with absolute value greater than that of the observed test-statistic or until performing a maximum {\em max.nperms} permutations.
+Pounds et al. (2011) give a more detailed description of APT.
+
+\section{Example}
+This example illustrates how users may perform an AGDEX analysis.  
+\subsection{Prepare the Expression Data as {\em ExpressionSet} Object}
+First, users must prepare the {\em ExpressionSet} for each experiment.  
+The {\em human.data} and {\em mouse.data} {\em ExpressionSet} objects are included in the AGDEX package. 
+
+<<Load AGDEX package and data>>=
+library(AGDEX)
+data(human.data)              # Load the human.data ExpressionSet object
+head(exprs(human.data)[,1:5]) # Preview the human expression data
+head(pData(human.data))       # Preview the human phenotype data 
+table(pData(human.data)$grp)  # See number in each group
+all(rownames(pData(human.data))==colnames(exprs(human.data)))  # Check that expression data and phenotype data have samples in the same order
+data(gset.data)  # A GeneSetCollection for human.data
+
+# Now the same for the mouse.data
+data(mouse.data)              
+head(exprs(mouse.data)[,1:5]) 
+head(pData(mouse.data))       
+table(pData(mouse.data)$grp)  
+all(colnames(exprs(mouse.data))==rownames(pData(mouse.data)))
+
+@
+
+\subsection{Form a {\em dex.set} Object for Each Experiment}
+Second, for each experiment, information defining the differential expression analysis must be combined with the {\em ExpressionSet} data and stored in a {\em dex.set} object by using {\em make.dex.set.object}, as shown below.
+
+<<prepare dex.set object>>=
+
+
+# Create dex.set for human.comparison
+dex.set.human <- make.dex.set.object(Eset.data= human.data,                            
+                                     comp.var=2,                                       
+                                     comp.def="human.tumor.typeD-other.human.tumors",  
+                                     gset.collection=gset.data)                        
+dex.set.mouse <- make.dex.set.object(mouse.data,
+                                     comp.var=2,
+                                     comp.def="mouse.tumor-mouse.control",
+                                     gset.collection=NULL)                                      
+
+@
+
+In the first statement above, {\em Eset.data=human.data} indicates that the {\em ExpressionSet} object {\em human.data} contains the expression and phenotype data, {\em comp.var=2} indicates that the second column
+of the phenotype data (e.g. {\em pData(human.data)[,2]}) has the group labels for the differential expression analysis comparison, {\em comp.def=``human.tumor.typeD-other.human.tumors''} indicates that the 
+comparison will be computed as ``human.tumor.typeD'' minus ``other.human.tumors'', and {\em gset.collection=gset.data} indicates that the {\em GeneSetcollection} object {\em gset.data} defines gene-sets for 
+the differential expression analysis.  The second statement above performs an analogous operation for the mouse data, except that it does not provide gene-set definitions for gene-set analyses.
+
+\subsection{Prepare the {\em map.data} Object that Defines How Probe-Sets are Matched Across Experiments}
+The {\em map.data} list object includes a component {\em probe.map} with a {\em data.frame} that defines how probe-sets
+are matched across experiments and components {\em map.Aprobe.col} and {\em map.Bprobe.col} that give the name or numeric index
+of the columns with the probe-set identifiers from experiments ``A'' and ``B'', respectively.  The code segment below illustrates
+the structure of the {\em map.data} object.
+
+<<Illustrate Structure of map.data Object>>=
+data(map.data)
+names(map.data)
+head(map.data$probe.map)
+map.data$map.Aprobe.col
+map.data$map.Bprobe.col
+@
+
+\subsection{Perform the AGDEX Analysis}
+Now that the {\em dex.set} objects for each experiment and the {\em map.data} object have been prepared, the AGDEX analysis
+may be performed by a simple call to the function {\em agdex}, as shown below.
+
+<<AGDEX Analysis>>=
+agdex.res<-agdex(dex.setA=dex.set.human,
+                 dex.setB=dex.set.mouse,
+                 map.data=map.data,
+                 min.nperms=5,
+                 max.nperms=10)
+@
+This statement performs the AGDEX analysis with the human data considered as experiment ``A'' and the mouse data considered as experiment ``B''.  Note that
+it is important that the call to the function {\em agdex} and the {\em map.data} object label the experiments in the same way.  Clearly, one usually will set larger
+values of {\em min.nperms} and {\em max.nperms} in most applications.  The classical permutation test can be performed by setting {\em min.nperms} = {\em max.nperms}.  
+See Pounds et al. (2011) for more details on how to set {\em min.nperms} and {\em max.nperms}.  The 
+AGDEX procedure will perform exact tests if the total number of permutations is less than the expected number of permutations under the null hypothesis of exchangeability.
+
+\subsection{Explore AGDEX Results}
+
+The results of the AGDEX analysis are stored in a list with multiple components.  More details are available from {\em help(agdex.result)}.  
+As shown below, several components of the result object echo the input for the group labels and definition of the contrast for each differential expression analysis.  
+
+<<AGDEX Result Object>>=
+names(agdex.res)
+agdex.res$dex.compA                # echoes comp.def of dex.setA
+agdex.res$dex.compB                # echoes comp.def of dex.setB
+head(agdex.res$dex.asgnA)          # echoes group-labels from dex.setA
+head(agdex.res$dex.asgnB)          # echoes group-labels from dex.setB
+@
+
+The result object also contains the probe-set level differential expression analysis results for each experiment.  These components give
+the difference of means and p-values for each probe-set in their respective experiments.
+
+<<Differential Expression Analysis Results>>=
+head(agdex.res$dex.resA) # Human results, difference of means and p-values
+head(agdex.res$dex.resB) # Mouse Results, difference of means and p-values
+@
+
+The {\em meta.dex.res} component contains these results and the meta-analysis z-statistic and p-value for the matched probe-set pairs.
+
+<<Meta-Analysis Results>>=
+head(agdex.res$meta.dex.res)
+@
+
+The function {\em agdex.scatterplot} produces a scatterplot of the difference-of-means statistics for probe-set pairs.
+
+<<fig=T>>=
+ agdex.scatterplot(agdex.res, gset.id=NULL)
+@ 
+
+The results of the genome-wide AGDEX analysis are available in the {\em gwide.agdex.result} component.
+
+<<Genome-Wide Result>>=
+agdex.res$gwide.agdex.res
+@
+The {\em gwide.agdex.result} component is a {\em data.frame} with the cosine and difference-of-proportions statistics and their p-values
+by permutation of group labels from experiments ``A'' and ``B''.  It also indicates the number of permutations performed for each
+experiment and whether or not the test is exact (i.e., based on all possible permutations).
+
+The results of gene-set differential expression analysis for each experiment, cross-experiment meta-analysis, and cross-experiment agreement
+are available in the {\em gset.res} component.
+
+<<Gene-Set Results>>=
+head(agdex.res$gset.res)
+@
+
+If there is interest in seeing probe-set level details for the gene-set analysis results, the function {\em get.gset.result.details} may be used.   The function
+{\em get.gset.result.details} may be used to obtain details for a specific gene-set of particular interest or to obtain details for those with p-values less
+than a specific threshold.
+
+<<get result of gene-sets details>>=
+gset.res.stats<-get.gset.result.details(agdex.res, gset.ids = NULL, alpha=0.01)
+names(gset.res.stats)
+head(gset.res.stats$enrichA.details)
+head(gset.res.stats$agdex.details)
+dna.cat.process.gset.res<-get.gset.result.details(agdex.res, gset.ids="DNA_CATABOLIC_PROCESS")
+head(dna.cat.process.gset.res$agdex.details)
+@
+
+\subsection{Store and Report AGDEX Results}    
+User may also use the \emph{write.agdex.result} command to save their results in tab-delimited text format 
+for viewing in Microsoft Excel.  
+The command \emph{read.agdex.result} may be used to read the output of \emph{write.agdex.result} back into R.  
+
+Users may also wish to annotate the genes in each of the above result. Bioconductor annotation packages and annotation databases 
+provide these capabilities for a wide range of gene expression microarrays.  
+
+\section{References}
+\begin{enumerate}
+\item Pounds, S. et al. A Procedure to statistically evaluate agreement of differential expression for cross-species genomics. {\em Bioinformatics}, 
+doi: 10.1093/bioinformatics/btr362(2011).  
+\item Johnson, R. et al. Cross-species genomics matches driver mutations and cell compartments to model ependymoma. {\em Nature}, 466, 632-6 (2010).
+\item Gibson, P. et al. Subtypes of medulloblastoma have distinct developmental origins. {\em Nature}, 468, 1095-99 (2010). 
+\item Pounds, S., et al. Integrated Analysis of Pharmacokinetic, Clinical, and SNP Microarray 
+Data using Projection onto the Most Interesting Statistical Evidence with Adaptive Permutation Testing. 
+\em {International Journal of Data Mining and Bioinformatics}, 5:143-157 (2011).
+\end{enumerate}
+\end{document}
+
+
+
+
+
+
+
+
+
+
+
+

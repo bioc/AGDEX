@@ -1,7 +1,7 @@
 Package: AGDEX
 Type: Package
 Title: Agreement of Differential Expression Analysis
-Version: 1.11.0
+Version: 1.11.1
 Date: 2011-10-13
 Author: Stan Pounds <stanley.pounds@stjude.org>; Cuilan Lani Gao <cuilan.gao@stjude.org>
 Maintainer: Cuilan lani Gao <cuilan.gao@stjude.org>
